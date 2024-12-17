@@ -1,37 +1,70 @@
 import os
-from pydub import AudioSegment
 import speech_recognition as sr
+from pydub import AudioSegment
+from pydub.utils import make_chunks
+from pydub.silence import detect_nonsilent
 
-# Function to convert M4A to WAV
-def convert_m4a_to_wav(m4a_file):
-    audio = AudioSegment.from_file(m4a_file, format='m4a')
-    wav_file = m4a_file.replace('.m4a', '.wav')
-    audio.export(wav_file, format='wav')
-    return wav_file
+# Paths for input and output
+input_audio_path = "/Users/bruger/Desktop/Folders/KU/Master/year_1/blok_2/DM/DMnotes/dairy_microbiology/Lecture_memos/L13/slide_34-36.m4a"
+output_folder = "/Users/bruger/Desktop/Folders/KU/Master/year_1/blok_2/DM/DMnotes/dairy_microbiology/Lecture_memos/Processed_Files"
 
-# Function to transcribe audio
-def transcribe_audio(wav_file):
+# Ensure output folder exists
+os.makedirs(output_folder, exist_ok=True)
+
+# Define paths for intermediate files
+converted_wav_path = os.path.join(output_folder, "converted.wav")
+transcription_path = os.path.join(output_folder, "transcription.txt")
+
+# Customizable chunk length in milliseconds
+chunk_length_ms = 15000  # 15 seconds per chunk
+
+try:
+    # Step 1: Enhance audio volume and normalize
+    print("Enhancing audio volume and normalizing...")
+    audio = AudioSegment.from_file(input_audio_path, format="m4a")
+    louder_audio = audio + 10  # Increase volume
+    normalized_audio = louder_audio.normalize()
+
+    # Step 2: Export the enhanced audio as .wav
+    print("Converting to .wav format...")
+    normalized_audio.export(converted_wav_path, format="wav")
+    print(f"Converted file saved to: {converted_wav_path}")
+
+    # Step 3: Split audio into chunks
+    print("Splitting audio into chunks...")
+    chunks = make_chunks(normalized_audio, chunk_length_ms)
+
     recognizer = sr.Recognizer()
-    with sr.AudioFile(wav_file) as source:
-        audio_data = recognizer.record(source)  # read the entire audio file
+    all_text = ""
+
+    for i, chunk in enumerate(chunks):
+        # Remove silence from the chunk
+        nonsilent_ranges = detect_nonsilent(chunk, min_silence_len=500, silence_thresh=-40)
+        for start, end in nonsilent_ranges:
+            chunk = chunk[start:end]
+
+        chunk_file = os.path.join(output_folder, f"chunk_{i + 1}.wav")
+        chunk.export(chunk_file, format="wav")
+        print(f"Processing chunk {i + 1}/{len(chunks)}...")
+
+        with sr.AudioFile(chunk_file) as source:
+            audio_data = recognizer.record(source)
+
         try:
-            text = recognizer.recognize_google(audio_data)  # use Google Web Speech API
-            return text
+            # Recognize speech for each chunk
+            text = recognizer.recognize_google(audio_data, language="en-US")
+            all_text += f"Chunk {i + 1}:\n{text}\n\n"
         except sr.UnknownValueError:
-            return "Google Speech Recognition could not understand audio"
+            print(f"Chunk {i + 1}: Could not understand the audio")
+            all_text += f"Chunk {i + 1}: [Unintelligible]\n\n"
         except sr.RequestError as e:
-            return f"Could not request results from Google Speech Recognition service; {e}"
+            print(f"Chunk {i + 1}: Recognition connection failed: {e}")
+            all_text += f"Chunk {i + 1}: [Connection failed]\n\n"
 
-# Main function
-def main():
-    m4a_file = '/Users/bruger/Desktop/Folders/KU/Master/year_1/blok_2/DM/DMnotes/dairy_microbiology/Lecture_memos/test.m4a'  # Replace with your M4A file path
-    wav_file = convert_m4a_to_wav(m4a_file)
-    transcription = transcribe_audio(wav_file)
-    print("Transcription:")
-    print(transcription)
+    # Step 4: Save transcription to a .txt file
+    with open(transcription_path, "w") as file:
+        file.write(all_text)
+    print(f"Transcription saved to: {transcription_path}")
 
-    # Clean up the WAV file if desired
-    os.remove(wav_file)
-
-if __name__ == "__main__":
-    main()
+except Exception as e:
+    print(f"An error occurred: {e}")

@@ -2,7 +2,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 
 # Path to .m4a file
-audio_file_path = "/Users/bruger/Desktop/Folders/KU/Master/year_1/blok_2/DM/DMnotes/dairy_microbiology/Lecture_memos/test.m4a"
+audio_file_path = "/Users/bruger/Desktop/Folders/KU/Master/year_1/blok_2/DM/DMnotes/dairy_microbiology/Lecture_memos/L13/slide_34-36.m4a"
 
 try:
     # Convert from .m4a to .wav
